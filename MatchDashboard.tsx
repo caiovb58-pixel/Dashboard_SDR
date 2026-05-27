@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { SDR, Assessor, MatchResult } from '../types';
+import { calculateGoalProgress } from '../goalMetrics';
 import { 
   Sparkles, UserCheck, Shield, ChevronRight, Play, HelpCircle, 
   Download, Calendar, AlertCircle, ArrowUpRight, Award, Flame, Gauge, 
@@ -13,6 +14,7 @@ interface MatchDashboardProps {
   onGenerateMatches: () => void;
   startDate: string;
   endDate: string;
+  currentMonth: string;
   onUpdateStartDate: (date: string) => void;
   onUpdateEndDate: (date: string) => void;
   onUpdateMatchDates?: (sdrId: string, assessorId: string, startDate: string, endDate: string) => void;
@@ -25,6 +27,7 @@ export default function MatchDashboard({
   onGenerateMatches,
   startDate,
   endDate,
+  currentMonth,
   onUpdateStartDate,
   onUpdateEndDate,
   onUpdateMatchDates,
@@ -102,7 +105,6 @@ export default function MatchDashboard({
     const activeSDRs = sdrs.filter(s => s.active);
     
     activeSDRs.forEach(sdr => {
-      const conversion = sdr.agendamentosCount > 0 ? Math.round((sdr.efetivacoesCount / sdr.agendamentosCount) * 105) : 0;
       const rate = sdr.agendamentosCount > 0 ? Math.round((sdr.efetivacoesCount / sdr.agendamentosCount) * 100) : 0;
       
       // If conversion is below goal
@@ -123,14 +125,13 @@ export default function MatchDashboard({
         });
       }
 
-      // Below monthly goal
-      const bookingsMeta = sdr.metaAgendamentos || 20;
-      const progressRatio = sdr.agendamentosCount / bookingsMeta;
-      if (progressRatio < 0.6) {
+      // Below the expected target for today in the selected month
+      const sdrProgress = calculateGoalProgress([sdr], currentMonth);
+      if (sdr.agendamentosCount < sdrProgress.expectedRealizedToday && sdrProgress.progressGap < -10) {
         list.push({
           type: 'danger',
           text: `Alerta de Volume de Leads: ${sdr.name}`,
-          details: `Apenas ${sdr.agendamentosCount} agendamentos entregues do funil frente à meta de ${bookingsMeta}. Estimule ligações frias.`
+          details: `Apenas ${sdr.agendamentosCount} agendamentos frente ao alvo de ${sdrProgress.expectedRealizedToday} para hoje. Priorize cadencia e repescagem.`
         });
       }
     });
@@ -286,7 +287,7 @@ export default function MatchDashboard({
             <UserCheck className="w-10 h-10 text-neutral-300 mx-auto mb-2" />
             <h3 className="text-xs font-bold text-neutral-700 uppercase tracking-wide">Sem mapeamentos vigentes</h3>
             <p className="text-xs text-neutral-455 mt-1 max-w-sm mx-auto leading-relaxed">
-              Clique em <strong className="text-black font-extrabold">"Distribuir Novo Rodízio de Parcerias"</strong> para rodar o acasalamento dos Assessores.
+              Clique em <strong className="text-black font-extrabold">"Distribuir Novo Rodízio de Parcerias"</strong> para gerar o pareamento dos Assessores.
             </p>
           </div>
         ) : (
