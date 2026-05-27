@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { SDR } from '../types';
+import { calculateGoalProgress } from '../goalMetrics';
 import { 
   Plus, Trash2, Shield, User, ToggleLeft, ToggleRight, X, 
   Target, TrendingUp, Edit2, Check, AlertTriangle, HelpCircle, 
@@ -13,6 +14,7 @@ interface SDRSectionProps {
   onToggleActiveSDR: (id: string) => void;
   onUpdateSDRMetrics: (id: string, agendamentos: number, efetivacoes: number) => void;
   onUpdateSDR?: (id: string, updatedFields: Partial<SDR>) => void;
+  currentMonth: string;
 }
 
 export default function SDRSection({
@@ -22,6 +24,7 @@ export default function SDRSection({
   onToggleActiveSDR,
   onUpdateSDRMetrics,
   onUpdateSDR,
+  currentMonth,
 }: SDRSectionProps) {
   // Sub-tabs inside the SDR Section to centralize registration and targets
   const [subTab, setSubTab] = useState<'list' | 'goals'>('list');
@@ -151,7 +154,8 @@ export default function SDRSection({
   // Critical items (SDRs active that are below target either on total booking or conversion rate)
   const criticalSDRs = activeSDRs.filter(s => {
     const rate = s.agendamentosCount > 0 ? Math.round((s.efetivacoesCount / s.agendamentosCount) * 100) : 0;
-    const belowBooking = s.agendamentosCount < (s.metaAgendamentos || 20);
+    const sdrProgress = calculateGoalProgress([s], currentMonth);
+    const belowBooking = s.agendamentosCount < sdrProgress.expectedRealizedToday;
     const belowRate = rate < (s.metaEfetivacaoRate || 50);
     return belowBooking || belowRate;
   });
@@ -701,7 +705,8 @@ export default function SDRSection({
               ) : (
                 criticalSDRs.map(sdr => {
                   const rate = sdr.agendamentosCount > 0 ? Math.round((sdr.efetivacoesCount / sdr.agendamentosCount) * 100) : 0;
-                  const isBelowBooking = sdr.agendamentosCount < (sdr.metaAgendamentos || 20);
+                  const sdrProgress = calculateGoalProgress([sdr], currentMonth);
+                  const isBelowBooking = sdr.agendamentosCount < sdrProgress.expectedRealizedToday;
                   const isBelowRate = rate < (sdr.metaEfetivacaoRate || 50);
 
                   return (
@@ -714,7 +719,7 @@ export default function SDRSection({
                       <div className="flex items-center gap-3 font-mono font-bold text-[11px]">
                         {isBelowBooking && (
                           <span className="text-neutral-500 bg-neutral-100 px-2 py-0.5 rounded border border-neutral-200">
-                            Vol. Agend.: {sdr.agendamentosCount} / meta {sdr.metaAgendamentos || 20}
+                            Vol. Agend.: {sdr.agendamentosCount} / alvo hoje {sdrProgress.expectedRealizedToday}
                           </span>
                         )}
                         {isBelowRate && (
