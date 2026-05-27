@@ -37,6 +37,11 @@ app.post("/api/gemini/guidance", async (req, res) => {
     GAP LINEAR: ${thermometer.progressGap > 0 ? '+' : ''}${thermometer.progressGap}%
     STATUS DO TERMÔMETRO: ${thermometer.temperature}
     DIAS ELAPSADOS NO MÊS: ${thermometer.currentDaysElapsed} de ${thermometer.totalDaysInMonth} dias
+    REALIZADO / META: ${thermometer.totalRealized} de ${thermometer.totalTarget} agendamentos
+    FALTAM PARA META: ${thermometer.remainingToGoal}
+    RITMO ATUAL: ${thermometer.currentDailyPace} agendamentos/dia
+    RITMO NECESSARIO: ${thermometer.requiredDailyPace} agendamentos/dia
+    PROJECAO NO FECHAMENTO: ${thermometer.projectedTotal} agendamentos
   ` : "";
 
   const prompt = `
@@ -76,8 +81,11 @@ app.post("/api/gemini/guidance", async (req, res) => {
       const gapStr = thermometer ? `${gapSign}${thermometer.progressGap}% de gap` : "";
       const tempStr = thermometer ? thermometer.temperature : "ESTÁVEL";
       const totalRel = thermometer ? thermometer.realizedProgress : 0;
+      const requiredDailyPace = thermometer?.requiredDailyPace ?? 0;
+      const currentDailyPace = thermometer?.currentDailyPace ?? 0;
+      const remainingToGoal = thermometer?.remainingToGoal ?? 0;
 
-      const lowPerformers = sdrStats.filter((s: any) => s.agendamentosCount < s.metaAgendamentos || (s.agendamentosCount > 0 && (s.efetivacoesCount / s.agendamentosCount * 100) < s.metaEfetivacaoRate));
+      const lowPerformers = sdrStats.filter((s: any) => s.agendamentosCount < (s.expectedAgendamentosToday ?? s.metaAgendamentos) || (s.agendamentosCount > 0 && (s.efetivacoesCount / s.agendamentosCount * 100) < s.metaEfetivacaoRate));
       const highPerformers = sdrStats.filter((s: any) => s.agendamentosCount >= s.metaAgendamentos && (s.agendamentosCount > 0 && (s.efetivacoesCount / s.agendamentosCount * 100) >= s.metaEfetivacaoRate));
 
       let insights = `### 📋 Relatório de Consultoria Operacional (IA Analítica)
@@ -86,14 +94,14 @@ app.post("/api/gemini/guidance", async (req, res) => {
 
 #### 1. **🌡️ Termômetro de Performance: ${tempStr}**
 - **Progresso Realizado**: **${totalRel}%** vs **${thermometer ? thermometer.expectedProgress : 0}%** esperado para o dia do mês (${elapsedStr}).
-- **Diagnóstico Temporal**: O time comercial está com **${gapStr}** em relação ao ritmo linear ideal. Para atingir 100% da cota mensal, a força de vendas precisa acelerar a cadência diária de prospecção.
+- **Diagnostico Temporal**: O time comercial esta com **${gapStr}** em relacao ao ritmo linear ideal. Restam **${remainingToGoal} agendamentos**. O ritmo atual e **${currentDailyPace}/dia** e o ritmo necessario para fechar a meta e **${requiredDailyPace}/dia**.
 
 #### 2. **📉 Gargalos Críticos & Alinhamento**
 `;
       if (lowPerformers.length > 0) {
         lowPerformers.forEach((s: any) => {
           const rate = s.agendamentosCount > 0 ? Math.round((s.efetivacoesCount / s.agendamentosCount) * 100) : 0;
-          insights += `- **${s.name}**: Está operando abaixo da cota linear (Feito: ${s.agendamentosCount}/${s.metaAgendamentos} agendamentos, Conversão: ${rate}% vs meta de ${s.metaEfetivacaoRate}%). Seu foco deve ser a blindagem de reuniões antes do fechamento semanal.\n`;
+          insights += `- **${s.name}**: Está operando abaixo da cota linear (Feito: ${s.agendamentosCount}/${s.expectedAgendamentosToday ?? s.metaAgendamentos} agendamentos esperados hoje, Conversão: ${rate}% vs meta de ${s.metaEfetivacaoRate}%). Seu foco deve ser a blindagem de reuniões antes do fechamento semanal.\n`;
         });
       } else {
         insights += `- Excelente! Todo o time comercial está correspondendo ao avanço cronológico estendido do mês.\n`;
