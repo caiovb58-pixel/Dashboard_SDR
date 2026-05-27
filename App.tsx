@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { SDR, Assessor, MatchResult, TeamLeader } from './types';
 import { INITIAL_SDRS, INITIAL_ASSESSORES } from './mockData';
 import { generateMatches } from './matchingEngine';
+import { calculateGoalProgress } from './goalMetrics';
 
 // Components
 import SDRSection from './components/SDRSection';
@@ -365,71 +366,7 @@ export default function App() {
   const activeSDRsCount = derivedSdrsForActiveMonth.filter(s => s.active).length;
   const activeAssessoresCount = assessores.filter(a => a.active).length;
 
-  // --- MATHEMATICAL AI PROGRESS THERMOMETER ENGINE ---
-  const getThermometerStats = () => {
-    const activeSdrsList = derivedSdrsForActiveMonth.filter(s => s.active);
-
-    const [year, month] = currentMonth.split('-').map(Number);
-    const totalDays = new Date(year, month, 0).getDate(); // Total days in this month
-    
-    // Static core simulated date is 2026-05-27
-    const realYear = 2026;
-    const realMonth = 5;
-    const realDay = 27;
-
-    let elapsedDays = totalDays; // For past months
-    if (year === realYear && month === realMonth) {
-      elapsedDays = realDay; // 27
-    } else if (year > realYear || (year === realYear && month > realMonth)) {
-      elapsedDays = 0; // future month
-    }
-
-    const expectedPercent = totalDays > 0 ? Math.round((elapsedDays / totalDays) * 100) : 0;
-
-    // Realized deliveries
-    const totalRel = activeSdrsList.reduce((sum, s) => sum + (s.agendamentosCount || 0), 0);
-    const totalGoal = activeSdrsList.reduce((sum, s) => sum + (s.metaAgendamentos || 20), 0);
-
-    const realizedPercent = totalGoal > 0 ? Math.round((totalRel / totalGoal) * 100) : 0;
-    const progressGap = realizedPercent - expectedPercent;
-
-    let temperature = '⚖️ EM EQUILÍBRIO';
-    let labelColor = 'text-blue-700 bg-blue-50 border-blue-200';
-    let barColor = 'bg-[#111]'; // Sober pitch-black active color
-    
-    if (realizedPercent >= 100) {
-      temperature = '⚡ EXCELÊNCIA / META BATIDA';
-      labelColor = 'text-emerald-700 bg-emerald-50 border-emerald-200';
-      barColor = 'bg-emerald-600';
-    } else if (progressGap >= 10) {
-      temperature = '🔥 RITMO EM ALTA';
-      labelColor = 'text-green-800 bg-green-50 border-green-200';
-      barColor = 'bg-green-600';
-    } else if (progressGap < -20) {
-      temperature = '❄️ ALERTA CRÍTICO';
-      labelColor = 'text-red-700 bg-red-50 border-red-200';
-      barColor = 'bg-red-600';
-    } else if (progressGap < 0) {
-      temperature = '⚠️ RITMO COM ATRASO';
-      labelColor = 'text-amber-800 bg-amber-50 border-amber-200';
-      barColor = 'bg-amber-600';
-    }
-
-    return {
-      realizedProgress: realizedPercent,
-      expectedProgress: expectedPercent,
-      progressGap,
-      temperature,
-      labelColor,
-      barColor,
-      currentDaysElapsed: elapsedDays,
-      totalDaysInMonth: totalDays,
-      totalRealized: totalRel,
-      totalTarget: totalGoal
-    };
-  };
-
-  const thermStats = getThermometerStats();
+  const thermStats = calculateGoalProgress(derivedSdrsForActiveMonth, currentMonth);
 
   // --- 1. RENDER LOGIN SCREEN (FIRST PAGE ENTRANCE GATE) ---
   if (!currentUser) {
@@ -728,10 +665,10 @@ export default function App() {
                 </span>
               </div>
               <h3 className="text-base font-black text-neutral-950 font-display uppercase tracking-tight">
-                Mês de Referência: {currentMonth.split('-')[1]}/2026
+                Mês de Referência: {currentMonth.split('-')[1]}/{currentMonth.split('-')[0]}
               </h3>
               <p className="text-xs text-neutral-600 leading-normal font-sans">
-                O time realizou <strong className="text-[#111111]">{thermStats.totalRealized} agendamentos</strong> frente à meta final de <strong className="text-[#111111]">{thermStats.totalTarget}</strong>. Espera-se que estivéssemos hoje (Dia 27 de {thermStats.totalDaysInMonth}) em <strong>{thermStats.expectedProgress}%</strong>.
+                O time realizou <strong className="text-[#111111]">{thermStats.totalRealized} agendamentos</strong> frente a meta final de <strong className="text-[#111111]">{thermStats.totalTarget}</strong>. Pelo dia <strong>{thermStats.currentDaysElapsed}</strong> de {thermStats.totalDaysInMonth}, o alvo acumulado e <strong>{thermStats.expectedProgress}%</strong> ({thermStats.expectedRealizedToday} agendamentos).
               </p>
             </div>
 
@@ -769,6 +706,22 @@ export default function App() {
                 <span className={thermStats.progressGap >= 0 ? 'text-green-700' : 'text-red-700'}>
                   Gap Temporal: {thermStats.progressGap > 0 ? '+' : ''}{thermStats.progressGap}% {thermStats.progressGap >= 0 ? 'Adiantado' : 'Atrasado'}
                 </span>
+              </div>
+            
+
+              <div className="grid grid-cols-3 gap-2 pt-1">
+                <div className="bg-neutral-50 border border-neutral-200 rounded-lg px-2 py-1.5">
+                  <span className="block text-[8px] font-black text-neutral-400 uppercase">Faltam</span>
+                  <strong className="font-mono text-xs text-neutral-900">{thermStats.remainingToGoal}</strong>
+                </div>
+                <div className="bg-neutral-50 border border-neutral-200 rounded-lg px-2 py-1.5">
+                  <span className="block text-[8px] font-black text-neutral-400 uppercase">Ritmo/dia</span>
+                  <strong className="font-mono text-xs text-neutral-900">{thermStats.requiredDailyPace}</strong>
+                </div>
+                <div className="bg-neutral-50 border border-neutral-200 rounded-lg px-2 py-1.5">
+                  <span className="block text-[8px] font-black text-neutral-400 uppercase">Projecao</span>
+                  <strong className="font-mono text-xs text-neutral-900">{thermStats.projectedTotal}</strong>
+                </div>
               </div>
             </div>
 
@@ -812,6 +765,7 @@ export default function App() {
               onGenerateMatches={handleGenerateMatches}
               startDate={startDate}
               endDate={endDate}
+              currentMonth={currentMonth}
               onUpdateStartDate={handleUpdateStartDate}
               onUpdateEndDate={setEndDate}
               onUpdateMatchDates={handleUpdateMatchDates}
@@ -826,6 +780,7 @@ export default function App() {
               onToggleActiveSDR={handleToggleActiveSDR}
               onUpdateSDRMetrics={handleUpdateSDRMetrics}
               onUpdateSDR={handleUpdateSDR}
+              currentMonth={currentMonth}
             />
           )}
 
@@ -856,14 +811,7 @@ export default function App() {
               // Pass down month metadata and thermometer stats for AI Guidance endpoint synchronization
               monthAndThermometer={{
                 month: currentMonth,
-                thermometer: {
-                  realizedProgress: thermStats.realizedProgress,
-                  expectedProgress: thermStats.expectedProgress,
-                  progressGap: thermStats.progressGap,
-                  temperature: thermStats.temperature,
-                  currentDaysElapsed: thermStats.currentDaysElapsed,
-                  totalDaysInMonth: thermStats.totalDaysInMonth
-                }
+                thermometer: thermStats
               }}
               // Seamless authenticated session mapping
               sessionLeader={currentUser.role === 'leader' ? {
